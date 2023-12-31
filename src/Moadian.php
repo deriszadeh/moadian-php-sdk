@@ -29,7 +29,7 @@ class Moadian
     }
     private function requestNonce(){
 
-        return $this->sendRequest($this->apiBaseUrl.'/nonce?timeToLive='.mt_rand(100,10000));
+        return $this->sendRequest($this->apiBaseUrl.'/nonce?timeToLive='.mt_rand(100,200));
     }
 
     private function base64UrlEncode($data) {
