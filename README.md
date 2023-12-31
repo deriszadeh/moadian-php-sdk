@@ -2,7 +2,8 @@
 کیت PHP اتصال به سامانه مودیان (نسخه دوم وب سرویس) مبتنی بر REST API و گواهی امضای دیجیتال
 
 در این کتابخانه:
-- پیاده سازی JSON Web Encryption (JWE) - RFC7516
+- سازگار با نسخه های PHP7 و PHP8
+-  پیاده سازی JSON Web Encryption (JWE) - RFC7516
 - پیاده سازی  JSON Web Signature (JWS) - RFC7515
 - استفاده از کتابخانه phpseclib
 
