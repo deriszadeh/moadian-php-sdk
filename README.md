@@ -5,7 +5,9 @@
 - پیاده سازی JSON Web Encryption (JWE) - RFC7516
 - پیاده سازی  JSON Web Signature (JWS) - RFC7515
 - استفاده از کتابخانه phpseclib
-- 
+
+کتابخانه زیر جهت کار با نسخه اول وب سرویس مودیان است:
+https://github.com/Snapp-Market-Pro/moadian
 
 
 
