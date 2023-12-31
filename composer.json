@@ -1,0 +1,26 @@
+{
+  "name": "deriszadeh/moadian-php-sdk",
+  "type": "library",
+  "description": "PHP SDK for working with tp.tax.gov.ir (سامانه مودیان مالیاتی)",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Mohammad Bagher Deriszadeh",
+      "email": "mbderiszadeh@gmail.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Deriszadeh\\Moadian\\": "src/"
+    }
+  },
+
+  "require": {
+    "php": ">=7.1",
+    "ext-json": "*",
+    "ext-mbstring": "*",
+    "ext-curl": "*",
+    "ext-openssl": "*",
+    "phpseclib/phpseclib": "^3.0"
+  }
+}
