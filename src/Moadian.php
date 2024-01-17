@@ -2,8 +2,12 @@
 
 namespace Deriszadeh\Moadian;
 
+use DateTimeInterface;
 use Deriszadeh\Moadian\Exceptions\CommunicateException;
-use phpseclib3\Crypt\RSA;
+use Deriszadeh\Moadian\Services\JsonService;
+use Deriszadeh\Moadian\Services\JweService;
+use Deriszadeh\Moadian\Services\JwsService;
+use Deriszadeh\Moadian\Services\VerhoeffService;
 
 class Moadian
 {
@@ -12,8 +16,39 @@ class Moadian
     public $clientId = '';
     public $privateKeyBase64 = '';
     public $certificateBase64 = '';
+
     public $token = '';
+
     public $serverPublicKeys = [];
+
+    private  const CHARACTER_TO_NUMBER_CODING = [
+        'A' => 65,
+        'B' => 66,
+        'C' => 67,
+        'D' => 68,
+        'E' => 69,
+        'F' => 70,
+        'G' => 71,
+        'H' => 72,
+        'I' => 73,
+        'J' => 74,
+        'K' => 75,
+        'L' => 76,
+        'M' => 77,
+        'N' => 78,
+        'O' => 79,
+        'P' => 80,
+        'Q' => 81,
+        'R' => 82,
+        'S' => 83,
+        'T' => 84,
+        'U' => 85,
+        'V' => 86,
+        'W' => 87,
+        'X' => 88,
+        'Y' => 89,
+        'Z' => 90,
+    ];
 
     public function __construct($clientId, $privateKeyBase64, $certificateBase64){
 
@@ -24,92 +59,9 @@ class Moadian
         $this->certificateBase64 = trim(str_replace(['-----BEGIN CERTIFICATE-----', '-----END CERTIFICATE-----'], '', $certificateBase64));
     }
 
-    public function setApiBaseUrl($url){
-        $this->apiBaseUrl = $url;
-    }
     private function requestNonce(){
 
         return $this->sendRequest($this->apiBaseUrl.'/nonce?timeToLive='.mt_rand(100,200));
-    }
-
-    private function base64UrlEncode($data) {
-
-        return str_replace('=', '',  strtr( base64_encode($data), '+/', '-_'));
-    }
-
-    private function encodeJson($data) {
-
-        return json_encode($data,  JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
-    }
-    private function createJWS(array $header, array $payload){
-
-        if( ! (isset($header['alg']) && $header['alg'] == 'RS256')){
-            throw new \Exception('Cannot create JWS, the supported "alg" is (RS256).');
-        }
-
-        $jwtHeader = $this->base64UrlEncode($this->encodeJson($header));
-
-        $jwtPayload = $this->base64UrlEncode($this->encodeJson($payload));
-
-        $signAlg = '';
-
-        if($header['alg'] == 'RS256'){
-            $signAlg = 'sha256WithRSAEncryption';
-        }
-
-        openssl_sign( $jwtHeader.".".$jwtPayload, $jwtSig,  $this->privateKeyBase64,  $signAlg );
-
-        $jwtSig = $this->base64UrlEncode($jwtSig);
-
-        $jws = $jwtHeader.".".$jwtPayload.".".$jwtSig;
-
-        return $jws;
-    }
-
-
-
-    private function createJWE(array $header, $publicKey, $payload){
-
-        if( ! (isset($header['alg']) && $header['alg'] == 'RSA-OAEP-256')){
-            throw new \Exception('Cannot create JWE, the supported "alg" is (RSA-OAEP-256).');
-        }
-
-        if( ! (isset($header['enc']) && $header['enc'] == 'A256GCM')){
-            throw new \Exception('Cannot create JWE, the supported "enc" is (A256GCM).');
-        }
-
-        $cek = random_bytes(32);
-
-        $rsa = RSA::loadPublicKey($publicKey);
-        $encryptedKey = $rsa->encrypt($cek);
-
-        $iv = openssl_random_pseudo_bytes(12);
-
-        $AAD = $this->base64UrlEncode($this->encodeJson($header));
-
-        $encryptedData = openssl_encrypt($payload, 'aes-256-gcm', $cek, OPENSSL_RAW_DATA, $iv, $tag,  $AAD, 16);
-
-
-        $jwe = $this->base64UrlEncode($this->encodeJson($header)) . 'src' . $this->base64UrlEncode($encryptedKey) . '.' . $this->base64UrlEncode($iv) . '.' . $this->base64UrlEncode($encryptedData) . '.' . $this->base64UrlEncode($tag);
-
-
-        return $jwe;
-    }
-
-
-
-    function guidv4($data = null) {
-        // Generate 16 bytes (128 bits) of random data or use the data passed into the function.
-        $data = $data ?? random_bytes(16);
-        assert(strlen($data) == 16);
-
-        // Set version to 0100
-        $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
-        // Set bits 6-7 to 10
-        $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
-
-        // Output the 36 character UUID.
-        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 
 
@@ -122,12 +74,13 @@ class Moadian
         return $result;
     }
 
-    public function createInvoicePacket($requestTraceId, array $header, array $body, array $payments): array
-    {
+    public function createInvoicePacket($requestTraceId, array $header, array $body, array $payments){
 
         $datetime = New \DateTime();
 
-        $this->getServerInformation();
+        if( ! $this->serverPublicKeys){
+            $this->getServerInformation();
+        }
 
         $jwsHeader = [
             'alg' => 'RS256',
@@ -138,7 +91,7 @@ class Moadian
             'cty' => 'text/plain',
         ];
 
-        $invoiceJWS = $this->createJWS($jwsHeader, ['header' => $header, 'body' => $body, 'payments' => $payments]);
+        $invoiceJWS = JwsService::create($this->privateKeyBase64, $jwsHeader, ['header' => $header, 'body' => $body, 'payments' => $payments]);
 
         if(in_array('RSA', array_column($this->serverPublicKeys, 'algorithm'))) {
 
@@ -159,7 +112,7 @@ class Moadian
         ];
 
         $data = [
-                    'payload' => $this->createJWE($jweHeader, $serverPublicKey, $invoiceJWS),
+                    'payload' => JweService::create($jweHeader, $serverPublicKey, $invoiceJWS),
                     'header' => [
                         'requestTraceId' => $requestTraceId,
                         'fiscalId' => $this->clientId,
@@ -171,8 +124,7 @@ class Moadian
     }
 
 
-    private function requestToken(): string
-    {
+    public function requestToken(){
 
         $datetime = New \DateTime();
 
@@ -192,7 +144,7 @@ class Moadian
             'clientId' => $this->clientId,
         ];
 
-        $token = $this->createJWS($header, $payload);
+        $token = JwsService::create($this->privateKeyBase64, $header, $payload);
 
         $this->token = $token;
 
@@ -204,12 +156,11 @@ class Moadian
 
         $this->requestToken();
 
-        $result = $this->sendRequest($this->apiBaseUrl.'/fiscal-information?economicCode='.$memoryId, 'GET', $this->token);
+        $result = $this->sendRequest($this->apiBaseUrl.'/fiscal-information?memoryId='.$memoryId, 'GET', $this->token);
 
         return $result;
 
     }
-
     public function getTaxPayer($economicCode){
 
         $this->requestToken();
@@ -267,7 +218,7 @@ class Moadian
 
         return $result;
     }
-    private function getServerInformation(){
+    public function getServerInformation(){
 
         $this->requestToken();
 
@@ -280,10 +231,10 @@ class Moadian
             return $this->serverPublicKeys;
         }
 
-        throw new CommunicateException('Cannot get server information');
+        throw new CommunicateException('خطا در دریافت اطلاعات اولیه از سرور مودیان');
     }
 
-    private function sendRequest($url, $method = 'GET', $token = '', $data = []){
+    public function sendRequest($url, $method = 'GET', $token = '', $data = []){
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -291,14 +242,14 @@ class Moadian
         if($method == 'POST' && $data){
 
             curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $this->encodeJson($data));
+            curl_setopt($ch, CURLOPT_POSTFIELDS, JsonService::encode($data));
         }
 
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FRESH_CONNECT, TRUE);
-        //curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
 
         $headers = [];
         $headers[] = 'Content-Type: application/json';
@@ -328,6 +279,42 @@ class Moadian
     }
 
 
+    public  function generateInvoiceId(DateTimeInterface $date, int $internalInvoiceId): string
+    {
+        $daysPastEpoch = $this->getDaysPastEpoch($date);
+        $daysPastEpochPadded = str_pad($daysPastEpoch, 6, '0', STR_PAD_LEFT);
+        $hexDaysPastEpochPadded = str_pad(dechex($daysPastEpoch), 5, '0', STR_PAD_LEFT);
+
+        $numericClientId = $this->clientIdToNumber($this->clientId);
+
+        $internalInvoiceIdPadded = str_pad($internalInvoiceId, 12, '0', STR_PAD_LEFT);
+        $hexInternalInvoiceIdPadded = str_pad(dechex($internalInvoiceId), 10, '0', STR_PAD_LEFT);
+
+        $decimalInvoiceId = $numericClientId . $daysPastEpochPadded . $internalInvoiceIdPadded;
+
+        $checksum = VerhoeffService::checkSum($decimalInvoiceId);
+
+        return strtoupper($this->clientId . $hexDaysPastEpochPadded . $hexInternalInvoiceIdPadded . $checksum);
+    }
+
+    private function getDaysPastEpoch(DateTimeInterface $date): int
+    {
+        return (int)($date->getTimestamp() / (3600 * 24));
+    }
+
+    private function clientIdToNumber(string $clientId): string
+    {
+        $result = '';
+        foreach (str_split($clientId) as $char) {
+            if (is_numeric($char)) {
+                $result .= $char;
+            } else {
+                $result .= self::CHARACTER_TO_NUMBER_CODING[$char];
+            }
+        }
+
+        return $result;
+    }
 
 
 }
