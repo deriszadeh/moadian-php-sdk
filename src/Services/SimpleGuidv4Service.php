@@ -1,4 +1,7 @@
 <?php
+
+namespace Deriszadeh\Moadian\Services;
+
 class SimpleGuidv4Service{
 
     public static function generate(){
