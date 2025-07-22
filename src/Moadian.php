@@ -86,7 +86,7 @@ class Moadian
             'alg' => 'RS256',
             'typ' => 'jose',
             'x5c' => [$this->certificateBase64],
-            'sigT' => $datetime->format('Y-m-d').'T'.$datetime->format('H:i:s').'Z+0330',
+            'sigT' => $datetime->format('Y-m-d').'T'.$datetime->format('H:i:s').'Z',
             'crit' => ['sigT'],
             'cty' => 'text/plain',
         ];
@@ -134,7 +134,7 @@ class Moadian
             'alg' => 'RS256',
             'typ' => 'jose',
             'x5c' => [$this->certificateBase64],
-            'sigT' => $datetime->format('Y-m-d').'T'.$datetime->format('H:i:s').'Z+0330',
+            'sigT' => $datetime->format('Y-m-d').'T'.$datetime->format('H:i:s').'Z',
             'crit' => ['sigT'],
             'cty' => 'text/plain',
         ];
